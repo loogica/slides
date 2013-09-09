@@ -1,4 +1,4 @@
-NAME=index
+NAME=$@
 python rst-directive.py \
     --stylesheet=pygments.css \
     --theme-url=ui/loogica \
