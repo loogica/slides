@@ -1,7 +1,7 @@
 .. include:: <s5defs.txt>
 
-Tulip - Py3, Loop de Eventos + I/O Assíncrono
-=============================================
+Python C-API
+============
 
 :Authors: Felipe Cruz
 :Date:    $Date: 2013-08-20 23:00:00 +0000 (Tue, 20 Ago 2013) $
@@ -22,10 +22,31 @@ Agenda
 
 .. class:: big
 
-* Polling & Loop de Eventos
-* I/O Assíncrono e Não bloqueante
-* Generators, Coroutines, Futures e Tasks
-* I/O Assíncrono sem callbacks - yield from
+* Motivação
+* Linhas Gerais
+* Funções & Exemplos
+* Detalhes Finais
+* Alternativas
+* Conclusões
+
+Motivação
+---------
+
+* Integrar com código C já existente
+* Desempenho
+* Aprender sobre o Interpretador
+
+
+Linhas Gerais
+-------------
+
+* Declarar Função que inicializa o módulo
+* Declarar membros do módulo
+* Declara o Módulo
+* Declarar classes
+
+
+
 
 Polling
 -------
