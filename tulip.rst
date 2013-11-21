@@ -24,7 +24,7 @@ Agenda
 
 * Polling & Loop de Eventos
 * I/O Assíncrono e Não bloqueante
-* Generators, Coroutines, Futures e Tasks
+* Coroutines, Futures/Tasks
 * I/O Assíncrono sem callbacks - yield from
 
 Polling
@@ -45,24 +45,9 @@ Polling
 Polling - Etapas
 ----------------
 
-1 - Criar objeto poller
-2 - (Opcional) Registar um file descriptor
-3 - Execução do poll()
-
-Polling - Etapas
-----------------
-
-.. class:: medium
-.. sourcecode:: python
-
-    import select
-    # 1
-    kq = select.kqueue()
-    # 3
-    event = select.kevent(server, select.KQ_FILTER_READ,
-                                  select.KQ_EV_ADD, 0)
-    events = kq.control([event], 0, 0)
-    for ev in events: pass
+* Criar objeto poller
+* (Opcional) Registar um file descriptor
+* Execução do poll()
 
 Polling
 -------
@@ -71,18 +56,35 @@ Polling
 * Responsabilidade nossa de adicionar/remover eventos.
 * Iterar eventos e tratar cada item.
 
+
+Polling - Etapas
+----------------
+
+.. class:: medium
+.. sourcecode:: python
+
+    import socket
+    import select
+    server = socket.socket(socket.AF_INET,
+                           socket.SOCK_STREAM, 0)
+    server.bind(('127.0.0.1', 8888)); server.listen(10)
+    kq = select.kqueue()
+    events = select.kevent(server, 
+                           select.KQ_FILTER_READ,
+                           select.KQ_EV_ADD, 0)
+    events = kq.control([events], 0, 0)
+    for event in events:
+        pass
+
+
 Loop de Eventos
 ---------------
 
-* Polling + Loop + Callbacks
+* Tem um objeto Poller
+* Polling + Loop + Callbacks(*)
 * Executar X quando Y
 * Executar Z em N msecs
 * Executar W num pool de threads
-
-AbstractEventLoop
-BaseEventLoop
-BaseSelectorEventLoop
-SelectorEventLoop
 
 Loop de Eventos
 ---------------
@@ -100,88 +102,123 @@ Loop Eventos - Tulip
 * add_reader(), add_writer()
 
 
+I/O Assíncrono & Não Bloqueante
+-------------------------------
 
+* I/O Assíncrono: quero ser notificado quando uma tarefa
+  terminar - Ex: Pyaio, Windows IOCP
+* I/O Não bloqueante: Uma operação *nunca* bloqueia. Se ela
+  não puder ser executada na hora que pedimos, 
+  retorna um erro (-1) e errno == EAGAIN
+* Não são a mesma coisa mas são usados juntos muitas vezes.
 
+I/O Assíncrono
+--------------
 
-Polling - Etapas
-----------------
+* Nesse caso, chamamos de "completeness model".
 
-.. class:: medium
 .. sourcecode:: python
 
-    import socket
-    import select
-    server = socket.socket(socket.AF_INET,
-                           socket.SOCK_STREAM, 0)
-    server.bind(('127.0.0.1', 8888)); server.listen(10)
-    kq = select.kqueue()
-    kq.control([select.kevent(server, select.KQ_FILTER_READ, select.KQ_EV_ADD, 0)], 0, 0)
-    []
+    import pyaio
+    import os
 
+    def aio_callback(buf, rcode, errno):
+        print(buf)
+
+    fd = os.open('/tmp/pyaio.txt', os.O_RDONLY)
+    pyaio.aio_read(fd, 10, 20, aio_callback)
+
+I/O Não Bloqueante
+------------------
+
+
+.. sourcecode:: python
+
+    try:
+        data = sock.recv(n)
+    except (BlockingIOError, InterruptedError):
+        # devo tentar ler denovo em algum momento
+
+Coroutines
+----------
+
+* coro é suspensa até que alguem chame "send()"
+
+.. sourcecode:: python
+
+    def coro(times):
+        while True:
+            w = (yield)
+            print(w)
+
+    g = coro(5)
+    next(g)
+    g.send(20)
+
+Coroutines
+----------
+
+* coro é suspensa até que alguem chame "send()"
+* Parte da mágica do Tulip está nesse detalhe.
 
 Futures
 -------
 
-* Abstração de uma computação que ainda não foi feita
+* Abstração de uma computação que ainda não foi feita.
 * f.set_result()
 * f.add_done_callback()
-* futures.wait([f], [timeout, [flags]])
+* futures.wait([f1, f2], [timeout, [flags]])
 
 
-Tulip
+Sem Yield From
+--------------
 
-Futures + Coroutines
+* Temos que definir um callback para tratar o termino do evento
 
-
-.. class:: medium
 .. sourcecode:: python
 
-    import tulip
-    from tulip.futures import Future
-    from tulip.unix_events import SelectorEventLoop
-    from concurrent.futures import ThreadPoolExecutor
+    def read_static_file():
+        def read_callback(data, rcode, errno):
+            data_to_send = data
+            send_data(data_to_send)
 
-    loop = SelectorEventLoop()
-    f = Future(loop=loop)
+        rc = pyaio.aio_read(filename, 0, 
+                            4096, read_callback)
 
-    def run_thread_loop():
-        import os
-        print('XXXXX')
-        tasks.wait([f], loop=self)
-        print('BBBBB')
+Yield From
+----------
 
+* Yield from + Futures + Loop de eventos = expressividade
 
-    def run_briefly(loop):
-        @tulip.coroutine
-        def once():
-            pass
-        t = tulip.Task(once(), loop=loop)
-        loop.run_until_complete(t)
+.. sourcecode:: python
 
-    executor = ThreadPoolExecutor(max_workers=2)
-    fut = executor.submit(run_thread_loop)
-
-    f.set_result('HA!')
-    run_briefly(loop)
+    def read_static_file():
+        data, _, _ = yield from aio_read(filename, 
+                                         file_size=4096)
+        rc = yield from send(data)
 
 
+Yield from Minha Função
+-----------------------
 
-    def my_func():
-        result = yield from f
-        print(result)
-        return result
+* A função deve retornar um Future
+* Algúem tem que chamar "set_result(resultado)" da future
+* Quando isso acontece, o tulip faz um "coro.send(resultado)" e o método
+  que foi suspenso é resumido com aquele resultado
 
-    def fixture():
-        yield 'A'
-        x = yield from f
-        yield 'B', x
-        y = yield from f
-        yield 'C', y
+Yield From - Resumo
+-------------------
 
-    g = fixture()
-    assert next(g) == 'A'  # yield 'A'.
-    assert next(g) == f  # First yield from f.
-    f.set_result(42)
-    assert next(g) == ('B', 42)  # yield 'B', x.
-    # The second "yield from f" does not yield f.
-    assert next(g) == ('C', 42)  # yield 'C', y.
+* Uma forma de expressar que algo vai ser feito em outro momento
+* Permitir que uma função seja "pausada" em determinado estado
+* Integrada com uma forma de resumir o que foi pausado quando
+  definimos o resultado da future retornada.
+
+Fim
+---
+
+.. class:: huge
+
+* http://github.com/felipecruz
+* @felipejcruz
+* Perguntas?
